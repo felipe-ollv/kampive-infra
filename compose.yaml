@@ -28,14 +28,16 @@ services:
     image: kampive-api:0.0.1-local
     environment:
       SPRING_PROFILES_ACTIVE: local
+      SERVER_SERVLET_SESSION_COOKIE_SECURE: "true"
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
       DB_URL: jdbc:postgresql://postgres:5432/kampive
       DB_USERNAME: kampive_app
       DB_PASSWORD: ${DB_APP_PASSWORD:?Set DB_APP_PASSWORD in .env}
     depends_on:
       postgres:
         condition: service_healthy
-    ports:
-      - "127.0.0.1:8080:8080"
+    expose:
+      - "8080"
     networks:
       - backend
     read_only: true
@@ -46,8 +48,32 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  gateway:
+    build: ./gateway
+    image: kampive-gateway:0.0.1-local
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "127.0.0.1:8443:8443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:
 
 networks:
   backend:

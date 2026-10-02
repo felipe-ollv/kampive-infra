@@ -47,11 +47,13 @@ Faça isso uma única vez por volume novo. Não há scripts de inicialização m
 nem migrations. Depois:
 
 ```sh
-docker compose up -d --build api
-curl --fail http://localhost:8080/actuator/health
+docker compose up -d --build gateway
+mkdir -p certs
+docker compose cp gateway:/data/caddy/pki/authorities/local/root.crt certs/kampive-local-root.crt
+curl --cacert certs/kampive-local-root.crt --fail https://localhost:8443/actuator/health
 ```
 
-Resposta com status `UP` (pode incluir os grupos de saúde). Todas as demais rotas são bloqueadas.
+Resposta com status `UP` (pode incluir os grupos de saúde). Autenticação, perfil, catálogo e Swagger seguem suas regras específicas de acesso.
 O Dockerfile só gera a imagem final após os testes passarem.
 
 ## Schema de negócio
@@ -93,7 +95,7 @@ docker compose up -d
 docker compose logs -f api
 docker compose logs -f postgres
 docker compose ps
-docker compose up -d --build api
+docker compose up -d --build gateway
 docker compose stop
 docker compose down
 ```
@@ -101,7 +103,7 @@ docker compose down
 down mantém o volume. **Não use down -v ou volume prune: isso apaga dados.**
 Mudar senhas no .env não atualiza roles existentes: faça a rotação no psql e recrie a API.
 
-API: http://localhost:8080. DBeaver: localhost:5432, banco kampive, usuário kampive_app
+API: https://localhost:8443. DBeaver: localhost:5432, banco kampive, usuário kampive_app
 ou postgres apenas para administração. O simulador iOS do Mac acessa localhost.
 Dispositivos físicos exigirão configuração explícita de exposição na LAN.
 
@@ -110,8 +112,8 @@ Dispositivos físicos exigirão configuração explícita de exposição na LAN.
 ```sh
 docker build --target build --progress=plain -t kampive-api-tests:local ../kampive-api
 docker compose config --quiet
-curl --fail http://localhost:8080/actuator/health
-curl -i http://localhost:8080/api/campsites
+curl --cacert certs/kampive-local-root.crt --fail https://localhost:8443/actuator/health
+curl --cacert certs/kampive-local-root.crt -i https://localhost:8443/api/v1/users/me
 docker compose exec postgres psql -U postgres -d kampive
 ```
 
@@ -132,4 +134,38 @@ registre os OIDs do banco e de uma tabela, recrie os containers com
 
 Imagens oficiais fixadas por digest, com suporte à arquitetura do host (Apple Silicon
 incluído). API sem privilégios e portas em 127.0.0.1. Revisar digests e executar testes
-ao atualizar imagens. Sem TLS ou implantação de produção nesta etapa.
+ao atualizar imagens. TLS local terminado no Caddy; sem implantação de produção nesta etapa.
+
+## HTTPS local e simulador
+
+O gateway Caddy serve https://localhost:8443 e https://127.0.0.1:8443, com uma
+CA local persistida no volume caddy_data. Swagger: https://localhost:8443/swagger-ui.html.
+A porta HTTP da API não é publicada. A conexão gateway → API permanece HTTP dentro
+da rede Docker; o TLS protege o trecho cliente → gateway. PostgreSQL mantém a porta
+local 5432 para DBeaver. Proxy e API executam com UID 10001 e capabilities removidas.
+
+Após iniciar o gateway, exporte somente o certificado público conforme acima.
+A chave privada da CA permanece no volume; não a exporte, não a versione e não a compartilhe.
+certs/ é ignorado pelo Git. Não use curl -k nem desabilite validação TLS no aplicativo.
+
+Para cada simulador iOS que for usar, com ele aberto:
+
+```sh
+xcrun simctl keychain booted add-root-cert certs/kampive-local-root.crt
+```
+
+O navegador do Mac possui um armazenamento de confiança separado. Para usar o Swagger
+nele, importe certs/kampive-local-root.crt no Acesso às Chaves e configure confiança
+para desenvolvimento, ou use curl com --cacert. Confiar no simulador não altera a
+confiança do Mac. Um dispositivo físico exige outra configuração de rede/certificados.
+Os endereços acima não atendem diretamente ao emulador Android.
+
+O Compose sobrescreve a exceção HTTP do perfil local com cookie Secure=true e
+SERVER_FORWARD_HEADERS_STRATEGY=framework. Isso é seguro nesta topologia somente
+porque a API não tem porta pública e o Caddy remove Forwarded recebido e fornece
+os cabeçalhos X-Forwarded-* apropriados. Não exponha a API diretamente com essa opção.
+A configuração HTTP direta do perfil local continua útil nos testes isolados.
+
+Não remova o volume caddy_data: isso substitui a CA e exigirá confiar no novo certificado.
+Produção deverá usar domínio e certificado público, em configuração própria.
+Referência: https://caddyserver.com/docs/automatic-https

@@ -1,0 +1,23 @@
+{
+    admin off
+    skip_install_trust
+    auto_https disable_redirects
+    servers {
+        protocols h1 h2
+    }
+}
+
+https://localhost:8443, https://127.0.0.1:8443 {
+    tls internal
+    handle_path /legal/* {
+        root * /srv/legal
+        header Cache-Control "no-store"
+        header X-Content-Type-Options "nosniff"
+        file_server
+    }
+    handle {
+        reverse_proxy api:8080 {
+            header_up -Forwarded
+        }
+    }
+}
