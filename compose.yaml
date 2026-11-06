@@ -26,8 +26,18 @@ services:
       context: ../kampive-api
       dockerfile: Dockerfile
     image: kampive-api:0.0.1-local
+    volumes:
+      - campsite_uploads:/app/uploads
     environment:
       SPRING_PROFILES_ACTIVE: local
+      EMAIL_SENDER_ADDRESS: ${EMAIL_SENDER_ADDRESS:-contact@kampive.app}
+      EMAIL_SENDER_NAME: ${EMAIL_SENDER_NAME:-Kampive}
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
+      RECOVERY_RESET_URL: ${RECOVERY_RESET_URL:-https://localhost:8443/reset-password}
+      EMAIL_VERIFICATION_URL: ${EMAIL_VERIFICATION_URL:-https://localhost:8443/verify-email}
+      EMAIL_LOGO_URL: ${EMAIL_LOGO_URL:-https://localhost:8443/brand/icon.png}
+      EMAIL_SUPPORT_URL: ${EMAIL_SUPPORT_URL:-https://localhost:8443/support.html}
+      RECOVERY_TOKEN_KEY: ${RECOVERY_TOKEN_KEY:-}
       SERVER_SERVLET_SESSION_COOKIE_SECURE: "true"
       SERVER_FORWARD_HEADERS_STRATEGY: framework
       DB_URL: jdbc:postgresql://postgres:5432/kampive
@@ -42,7 +52,7 @@ services:
       - backend
     read_only: true
     tmpfs:
-      - /tmp:rw,noexec,nosuid,size=64m
+      - /tmp:rw,noexec,nosuid,size=256m
     cap_drop:
       - ALL
     security_opt:
@@ -57,6 +67,8 @@ services:
     ports:
       - "127.0.0.1:8443:8443"
     volumes:
+      - ../kampive-app/dist:/srv/app:ro
+      - ../kampive-app/assets/icon.png:/srv/brand/icon.png:ro
       - caddy_data:/data
       - caddy_config:/config
     networks:
@@ -71,6 +83,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  campsite_uploads:
   postgres_data:
   caddy_data:
   caddy_config:

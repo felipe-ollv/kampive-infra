@@ -169,3 +169,21 @@ A configuração HTTP direta do perfil local continua útil nos testes isolados.
 Não remova o volume caddy_data: isso substitui a CA e exigirá confiar no novo certificado.
 Produção deverá usar domínio e certificado público, em configuração própria.
 Referência: https://caddyserver.com/docs/automatic-https
+
+## Dados fictícios para o fluxo local
+
+`sql/demo-data.sql` é uma carga manual exclusiva de desenvolvimento, não uma migration. Requer o schema existente e um usuário ativo já cadastrado. Não redefine senhas, não substitui registros existentes e não roda na inicialização dos containers. UUIDs determinísticos e `ON CONFLICT DO NOTHING` permitem reaplicar o arquivo sem duplicar as fixtures. Alterações feitas nas fixtures pelo app são preservadas na reaplicação.
+
+Depois de reconstruir o gateway (`docker compose up -d --build gateway`), obtenha o UUID da conta que usará Meus campings e execute:
+
+```sh
+docker compose exec -T postgres psql -U postgres -d kampive -v ON_ERROR_STOP=1 -v owner_uuid='UUID_DA_CONTA_EXISTENTE' < sql/demo-data.sql
+```
+
+Inclui seis continentes, dez países, cidades, moedas, categorias, comodidades, ambientes, tipos de contato e opções de avaliações. Há trinta campings públicos fictícios com fotos/contatos/avaliações; a conta indicada recebe cinco exemplos próprios (rascunho, em análise, publicado, rejeitado e arquivado), três favoritos e três notificações. Contas fictícias de autoria não têm senha nem login social configurados. A conta real mantém suas credenciais e seu perfil.
+
+Fotos e página de contato são servidas em `https://localhost:8443/demo-assets/`, usando imagens do export Stitch fornecido pelo usuário, com origem em `gateway/demo-assets/sources.json`. Os estabelecimentos e depoimentos são explicitamente fictícios; endereços e coordenadas são ilustrativos. As fotografias não identificam propriedades reais.
+
+O frontend integrado exibe países, campings, detalhes, notas agregadas e Meus campings. Favoritos no servidor, leitura de comentários e notificações possuem dados preparados no banco, mas ainda dependem da implementação/integração desses módulos; inserir registros não implementa endpoints. O upload de arquivos também continua pendente. Não existem fixtures de identidade social, pois isso simularia vínculos com provedores externos.
+
+A carga não restaura nem apaga dados alterados. Não execute este arquivo em produção. Os arquivos são deliberadamente manuais e as imagens são exclusivas deste ambiente local.
